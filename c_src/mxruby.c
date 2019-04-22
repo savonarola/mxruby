@@ -1,8 +1,11 @@
 #include <string.h>
 #include "erl_nif.h"
 #include "mruby.h"
+#include "mruby/hash.h"
 #include "mruby/compile.h"
 #include "mruby/string.h"
+#include "mruby/value.h"
+#include "mruby/variable.h"
 
 ErlNifResourceType* RESOURCE_TYPE;
 
@@ -47,15 +50,74 @@ nresult_tuple(ErlNifEnv* env, const char* status,  const char* reason, size_t le
     if(!enif_alloc_binary(len, &reason_bin)) {
         return error_atom;
     }
-    strncpy(reason_bin.data, reason, len);
+    memcpy(reason_bin.data, reason, len);
     ERL_NIF_TERM reason_term = enif_make_binary(env, &reason_bin);
     return enif_make_tuple2(env, error_atom, reason_term);
 }
 
-static ERL_NIF_TERM
-result_tuple(ErlNifEnv* env, const char* status, const char* reason)
+static mrb_value
+atom_to_symbol(ErlNifEnv* env, mrb_state* mrb, ERL_NIF_TERM atom)
 {
-    return nresult_tuple(env, status, reason, strlen(reason));
+    unsigned len = 0;
+    if(!enif_get_atom_length(env, atom, &len, ERL_NIF_LATIN1))
+        return mrb_nil_value();
+
+    char buf[len + 1];
+
+    if(!enif_get_atom(env, atom, buf, len + 1, ERL_NIF_LATIN1))
+        return mrb_nil_value();
+
+    mrb_sym mid = mrb_intern(mrb, buf, len);
+    return mrb_symbol_value(mid);
+}
+
+static mrb_value
+binary_to_string(ErlNifEnv* env, mrb_state* mrb, ERL_NIF_TERM binary_term)
+{
+    ErlNifBinary binary;
+    if(!enif_inspect_binary(env, binary_term, &binary))
+        return mrb_nil_value();
+
+    mrb_value str = mrb_str_new(mrb, binary.data, binary.size);
+    return str;
+}
+
+
+static mrb_value
+kw_to_hash(ErlNifEnv* env, mrb_state* mrb, ERL_NIF_TERM kw)
+{
+
+    mrb_value mrb_hash = mrb_hash_new(mrb);
+
+    unsigned kw_len = 0;
+    if(!enif_get_list_length(env, kw, &kw_len))
+        return mrb_hash;
+
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail;
+
+    for(int i = 0; i < kw_len; i++) {
+        enif_get_list_cell(env, kw, &head, &tail);
+
+        const ERL_NIF_TERM *kw_entry;
+        unsigned arity = 0;
+        if(!enif_get_tuple(env, head, &arity, &kw_entry))
+            return mrb_hash;
+        if(arity != 2)
+            return mrb_hash;
+
+        ERL_NIF_TERM key = kw_entry[0];
+        ERL_NIF_TERM value = kw_entry[1];
+
+        mrb_value mrb_key = atom_to_symbol(env, mrb, key);
+        mrb_value mrb_value = binary_to_string(env, mrb, value);
+
+        mrb_hash_set(mrb, mrb_hash, mrb_key, mrb_value);
+
+        kw = tail;
+    }
+
+    return mrb_hash;
 }
 
 static ERL_NIF_TERM
@@ -79,8 +141,7 @@ create_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 static ERL_NIF_TERM
 exec_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-
-    if(argc != 2)
+    if(argc != 3)
         return enif_make_badarg(env);
 
     void* mrb_state_obj;
@@ -93,6 +154,10 @@ exec_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     if(!enif_inspect_binary(env, argv[1], &code))
         return enif_make_badarg(env);
 
+    mrb_value args = kw_to_hash(env, mrb, argv[2]);
+    mrb_sym sym = mrb_intern_lit(mrb, "$mxruby");
+    mrb_gv_set(mrb, sym, args);
+
     mrb_value obj = mrb_load_nstring(mrb, code.data, code.size);
 
     if(mrb->exc) {
@@ -101,13 +166,13 @@ exec_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         return nresult_tuple(env, "error", RSTRING_PTR(error_desc), RSTRING_LEN(error_desc));
     }
 
-    mrb_value error_desc = mrb_funcall(mrb, obj, "to_s", 0);
-    return nresult_tuple(env, "ok", RSTRING_PTR(error_desc), RSTRING_LEN(error_desc));
+    mrb_value result = mrb_funcall(mrb, obj, "to_s", 0);
+    return nresult_tuple(env, "ok", RSTRING_PTR(result), RSTRING_LEN(result));
 }
 
 static ErlNifFunc nif_funcs[] = {
     {"create_nif", 0, create_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-    {"exec_nif", 2, exec_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND}
+    {"exec_nif", 3, exec_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND}
 };
 
 

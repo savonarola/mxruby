@@ -1,7 +1,7 @@
 defmodule Mix.Tasks.Compile.MxRuby do
   def run(_args) do
     {result, _errcode} = System.cmd("make", [], stderr_to_stdout: true)
-    IO.binwrite(result)
+    IO.puts(result)
   end
 end
 
