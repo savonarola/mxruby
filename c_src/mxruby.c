@@ -2,11 +2,12 @@
 #include "erl_nif.h"
 #include "mruby.h"
 #include "mruby/compile.h"
+#include "mruby/string.h"
 
 ErlNifResourceType* RESOURCE_TYPE;
 
 static void
-resource_desructor(ErlNifEnv* env, void* obj)
+resource_destructor(ErlNifEnv* env, void* obj)
 {
     mrb_state *mrb_resource = (mrb_state*) obj;
     mrb_state *mrb = enif_alloc(sizeof(mrb_state));
@@ -21,7 +22,7 @@ load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info)
     const char* name = "mrb_state";
     int flags = ERL_NIF_RT_CREATE;
 
-    RESOURCE_TYPE = enif_open_resource_type(env, mod, name, resource_desructor, flags, NULL);
+    RESOURCE_TYPE = enif_open_resource_type(env, mod, name, resource_destructor, flags, NULL);
     if(RESOURCE_TYPE == NULL) return -1;
     return 0;
 }
@@ -39,11 +40,22 @@ enif_mrb_allocf(mrb_state *mrb, void *p, size_t size, void *ud)
 }
 
 static ERL_NIF_TERM
-error(ErlNifEnv* env, char* reason)
+nresult_tuple(ErlNifEnv* env, const char* status,  const char* reason, size_t len)
 {
-    ERL_NIF_TERM error_atom = enif_make_atom_len(env, "error", 5);
-    ERL_NIF_TERM reason_atom = enif_make_atom_len(env, reason, strlen(reason));
-    return enif_make_tuple2(env, error_atom, reason_atom);
+    ERL_NIF_TERM error_atom = enif_make_atom_len(env, status, strlen(status));
+    ErlNifBinary reason_bin;
+    if(!enif_alloc_binary(len, &reason_bin)) {
+        return error_atom;
+    }
+    strncpy(reason_bin.data, reason, len);
+    ERL_NIF_TERM reason_term = enif_make_binary(env, &reason_bin);
+    return enif_make_tuple2(env, error_atom, reason_term);
+}
+
+static ERL_NIF_TERM
+result_tuple(ErlNifEnv* env, const char* status, const char* reason)
+{
+    return nresult_tuple(env, status, reason, strlen(reason));
 }
 
 static ERL_NIF_TERM
@@ -82,9 +94,15 @@ exec_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         return enif_make_badarg(env);
 
     mrb_value obj = mrb_load_nstring(mrb, code.data, code.size);
-    ERL_NIF_TERM ok = enif_make_atom_len(env, "ok", 2);
 
-    return ok;
+    if(mrb->exc) {
+        mrb_value error_desc = mrb_funcall(mrb, mrb_obj_value(mrb->exc), "inspect", 0);
+        mrb->exc = 0;
+        return nresult_tuple(env, "error", RSTRING_PTR(error_desc), RSTRING_LEN(error_desc));
+    }
+
+    mrb_value error_desc = mrb_funcall(mrb, obj, "to_s", 0);
+    return nresult_tuple(env, "ok", RSTRING_PTR(error_desc), RSTRING_LEN(error_desc));
 }
 
 static ErlNifFunc nif_funcs[] = {

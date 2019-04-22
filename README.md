@@ -1,6 +1,20 @@
 # MXRuby
 
-**TODO: Add description**
+mruby wrapper in Elixir
+
+## Usage
+
+```elixir
+mruby = MXRuby.create()
+
+{:ok, "foo"} = MXRuby.exec(mruby, "class Foo; def foo; 123; end; end")
+
+{:error, "NoMethodError: undefined method 'bar'"} = MXRuby.exec(mruby, "Foo.new.bar")
+
+{:ok, "123"} = MXRuby.exec(mruby, "Foo.new.foo")
+
+{:ok, "4"} = MXRuby.exec(mruby, "1 + 3")
+```
 
 ## Installation
 
