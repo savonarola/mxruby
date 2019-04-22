@@ -7,7 +7,13 @@ mruby wrapper in Elixir
 ```elixir
 mruby = MXRuby.create()
 
-{:ok, "foo"} = MXRuby.exec(mruby, "class Foo; def foo; 123; end; end")
+{:ok, "foo"} = MXRuby.exec(mruby, """
+  class Foo
+    def foo
+      123
+    end
+  end
+""")
 
 {:error, "NoMethodError: undefined method 'bar'"} = MXRuby.exec(mruby, "Foo.new.bar")
 
