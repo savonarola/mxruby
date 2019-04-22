@@ -28,6 +28,6 @@ defmodule MXRuby.MixProject do
   end
 
   defp deps do
-    []
+    [{:benchfella, "~> 0.3.0", only: :dev}]
   end
 end

@@ -1,6 +1,6 @@
 ERL_INCLUDE_PATH=$(shell erl -eval 'io:format("~s", [lists:concat([code:root_dir(), "/erts-", erlang:system_info(version), "/include"])])' -s init stop -noshell)
 
-FLAGS=
+FLAGS=-O3
 
 UNAME=$(shell uname)
 
