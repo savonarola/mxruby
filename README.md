@@ -5,9 +5,9 @@ mruby wrapper in Elixir
 ## Usage
 
 ```elixir
-mruby = MXRuby.create()
+mruby = MXRuby.new()
 
-{:ok, "foo"} = MXRuby.exec(mruby, """
+{:ok, "foo"} = MXRuby.eval(mruby, """
   class Foo
     def foo
       123
@@ -15,11 +15,46 @@ mruby = MXRuby.create()
   end
 """)
 
-{:error, "NoMethodError: undefined method 'bar'"} = MXRuby.exec(mruby, "Foo.new.bar")
+{:error, "NoMethodError: undefined method 'bar'"} = MXRuby.eval(mruby, "Foo.new.bar")
 
-{:ok, "123"} = MXRuby.exec(mruby, "Foo.new.foo")
+{:ok, "123"} = MXRuby.eval(mruby, "Foo.new.foo")
 
-{:ok, "4"} = MXRuby.exec(mruby, "1 + 3")
+{:ok, "4"} = MXRuby.eval(mruby, "1 + 3")
+```
+
+## Passing arguments
+
+```elixir
+mruby = MXRuby.new()
+{:ok, res} = MXRuby.eval(mruby, "$mxruby.inspect", arg1: "val1", arg2: "val2")
+IO.puts(res)
+```
+
+Output:
+
+```
+{:arg1=>"val1", :arg2=>"val2"}
+```
+
+Argument keyword list should have only binaries as values.
+
+## `mruby` customisation
+
+```elixir
+
+use Mix.Config
+
+config :mxruby, :build_params, """
+  toolchain :gcc
+  conf.cc.flags << %w{-fPIC -O3}
+  conf.gembox 'full-core'
+
+  conf.gem :github => 'matsumotory/mruby-simplehttp'
+  conf.gem :github => 'matsumotory/mruby-httprequest'
+  conf.gem :github => 'mattn/mruby-http'
+  conf.gem :github => 'mattn/mruby-json'
+"""
+
 ```
 
 ## Installation

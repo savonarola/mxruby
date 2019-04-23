@@ -5,7 +5,8 @@ defmodule MXRuby do
 
   def load_nifs do
     path = Application.app_dir(:mxruby, "priv/mxruby")
-    :ok = :erlang.load_nif(path, 0)
+    :erlang.load_nif(path, 0)
+    :ok
   end
 
   def eval(mrb, code, args \\ []) when is_reference(mrb) and is_binary(code) do
